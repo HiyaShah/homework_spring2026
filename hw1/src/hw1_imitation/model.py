@@ -50,7 +50,8 @@ class MSEPolicy(BasePolicy):
         layers = []
         in_dim = state_dim 
         for hidden_dim in hidden_dims:
-            layers.append(nn.Linear(in_dim, hidden_dim), nn.ReLU())
+            layers.append(nn.Linear(in_dim, hidden_dim))
+            layers.append(nn.ReLU())
             in_dim = hidden_dim 
         layers.append(nn.Linear(in_dim, chunk_size*action_dim))
         self.net = nn.Sequential(*layers)
@@ -85,13 +86,34 @@ class FlowMatchingPolicy(BasePolicy):
         hidden_dims: tuple[int, ...] = (128, 128),
     ) -> None:
         super().__init__(state_dim, action_dim, chunk_size)
+        layers = []
+        in_dim = state_dim + chunk_size*action_dim + 1
+        for hidden_dim in hidden_dims:
+            layers.append(nn.Linear(in_dim, hidden_dim))
+            layers.append(nn.ReLU())
+            in_dim = hidden_dim 
+        layers.append(nn.Linear(in_dim, chunk_size*action_dim))
+        self.net = nn.Sequential(*layers)
+        
+    def _predict_velocity(self, state: torch.Tensor, x_t: torch.Tensor, t: torch.Tensor):
+        batch_size = state.shape[0]
+        x_flat = x_t.reshape(batch_size, -1)
+        inp = torch.cat([state, x_flat, t], dim=1)
+        return self.net(inp).view(-1,self.chunk_size, self.action_dim)
 
     def compute_loss(
         self,
         state: torch.Tensor,
         action_chunk: torch.Tensor,
     ) -> torch.Tensor:
-        raise NotImplementedError
+        device = state.device 
+        batch_size = state.shape[0]
+        t = torch.rand(batch_size, 1, device=device)
+        noise = torch.randn(batch_size, self.chunk_size, self.action_dim, device=device)
+        x_t = (1-t)[:, :, None]*noise+t[:, :, None]*action_chunk 
+        v_true = action_chunk - noise 
+        v_pred = self._predict_velocity(state, x_t, t)
+        return F.mse_loss(v_pred, v_true)
 
     def sample_actions(
         self,
@@ -99,7 +121,16 @@ class FlowMatchingPolicy(BasePolicy):
         *,
         num_steps: int = 10,
     ) -> torch.Tensor:
-        raise NotImplementedError
+        device = state.device 
+        batch_size = state.shape[0]
+        x = torch.randn(batch_size, self.chunk_size, self.action_dim, device = device)
+        dt = 1.0 / num_steps
+        with torch.no_grad():
+            for k in range(num_steps):
+                t = torch.full((batch_size, 1), k / num_steps, device=device)
+                v = self._predict_velocity(state, x, t)
+                x = x + v*dt 
+        return x
 
 
 PolicyType: TypeAlias = Literal["mse", "flow"]
