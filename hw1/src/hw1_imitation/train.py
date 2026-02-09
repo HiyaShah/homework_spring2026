@@ -145,6 +145,7 @@ def run_training(config: TrainConfig) -> None:
             if global_step % config.log_interval == 0:
                 logger.log({"train/loss": loss.item()}, step=global_step)
             if global_step % config.eval_interval == 0:
+                print("evaling!")
                 evaluate_policy(model=model, normalizer=normalizer, device=device, chunk_size=config.chunk_size, video_size=config.video_size, num_video_episodes=config.num_video_episodes, flow_num_steps=config.flow_num_steps, step=global_step, logger=logger)
                 model.train()
     logger.dump_for_grading()
