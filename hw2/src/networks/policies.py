@@ -61,6 +61,10 @@ class MLPPolicy(nn.Module):
         """Takes a single observation (as a numpy array) and returns a single action (as a numpy array)."""
         # TODO: implement get_action
         action = None
+        obs_t = ptu.from_numpy(obs).float()
+        dist = self.forward(obs_t)
+        action_t = dist.sample()  
+        action = ptu.to_numpy(action_t)
 
         return action
 
@@ -72,10 +76,15 @@ class MLPPolicy(nn.Module):
         """
         if self.discrete:
             # TODO: define the forward pass for a policy with a discrete action space.
-            pass
+            logits = self.logits_net(obs)
+            return D.Categorical(logits=logits)
         else:
             # TODO: define the forward pass for a policy with a continuous action space.
-            pass
+            mean = self.mean_net(obs)     
+            std = torch.exp(self.logstd)    
+            std = std.unsqueeze(0).expand_as(mean)
+            dist = D.Normal(mean, std)
+            return D.Independent(dist, 1)
 
     def update(self, obs: np.ndarray, actions: np.ndarray, *args, **kwargs) -> dict:
         """
