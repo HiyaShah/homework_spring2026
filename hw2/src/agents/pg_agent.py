@@ -149,12 +149,7 @@ class PGAgent(nn.Module):
         """
         if self.critic is None:
             # TODO: if no baseline, then what are the advantages?
-            advantages = None
             advantages = q_values.copy()
-            if self.normalize_advantages:
-                advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
-
-            return advantages
         else:
             # TODO: run the critic and use it as a baseline
             values = None
@@ -182,6 +177,6 @@ class PGAgent(nn.Module):
 
         # TODO: normalize the advantages to have a mean of zero and a standard deviation of one within the batch
         if self.normalize_advantages:
-            pass
+            advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
 
         return advantages
